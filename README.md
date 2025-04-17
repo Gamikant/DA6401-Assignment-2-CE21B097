@@ -14,7 +14,12 @@ This repository contains the implementation of a custom Convolutional Neural Net
 ├── sweep.py               # Hyperparameter tuning with Weights &amp; Biases
 ├── test_best_model.py     # Evaluation of the best model on test data
 ├── best_params.json       # Best hyperparameters from the sweep
-└── prediction_grid.png    # Visualization of model predictions
+├── prediction_grid.png    # Visualization of model predictions
+├── artifacts/             # Best parameters and model of all sweeps saved is separate folders inside artifacts
+└── inaturalist_12k/       # Dataset directory
+                    ├── train/       # Training data into 10 class folders
+                    └── val/         # Validation data into 10 class folders
+
 ```
 
 
