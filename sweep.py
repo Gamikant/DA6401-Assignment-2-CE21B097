@@ -36,7 +36,7 @@ def train_model(config=None):
         # Access all hyperparameter values from wandb.config
         config = wandb.config
         
-        # Create data loaders with or without augmentation
+        # Create data loaders with or without augmentation and with reduced dataset
         if config.data_augmentation == 'Yes':
             # Apply data augmentation to training data
             train_transform = get_data_augmentation_transform(img_size=config.img_size)
@@ -44,6 +44,34 @@ def train_model(config=None):
             
             # Get targets for stratified split
             targets = np.array(train_dataset.targets)
+            
+            # Reduce dataset size with stratified sampling
+            subset_fraction = args.subset_fraction
+            if subset_fraction < 1.0:
+                # Get indices for each class
+                class_indices = {}
+                for idx, label in enumerate(targets):
+                    if label not in class_indices:
+                        class_indices[label] = []
+                    class_indices[label].append(idx)
+                
+                # Select a stratified subset of indices
+                subset_indices = []
+                for label, indices in class_indices.items():
+                    # Calculate how many samples to take from this class
+                    n_samples = int(len(indices) * subset_fraction)
+                    # Ensure at least 1 sample per class
+                    n_samples = max(1, n_samples)
+                    # Randomly select indices
+                    selected_indices = np.random.choice(indices, size=n_samples, replace=False)
+                    subset_indices.extend(selected_indices)
+                
+                # Create a subset of the dataset
+                train_dataset_reduced = Subset(train_dataset, subset_indices)
+                # Update targets for the subset
+                targets = np.array([targets[i] for i in subset_indices])
+            else:
+                train_dataset_reduced = train_dataset
             
             # Perform stratified split
             train_indices, val_indices = train_test_split(
@@ -55,7 +83,7 @@ def train_model(config=None):
             )
             
             # Create subset datasets
-            train_subset = Subset(train_dataset, train_indices)
+            train_subset = Subset(train_dataset_reduced, train_indices)
             
             # For validation, use standard transform without augmentation
             val_transform = transforms.Compose([
@@ -64,8 +92,15 @@ def train_model(config=None):
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
             
-            val_dataset = datasets.ImageFolder(root=f"{args.data_dir}/train", transform=val_transform)
-            val_subset = Subset(val_dataset, val_indices)
+            if subset_fraction < 1.0:
+                # Create validation dataset from the original dataset
+                val_dataset = datasets.ImageFolder(root=f"{args.data_dir}/train", transform=val_transform)
+                # Use the same subset indices
+                val_dataset_reduced = Subset(val_dataset, subset_indices)
+                val_subset = Subset(val_dataset_reduced, val_indices)
+            else:
+                val_dataset = datasets.ImageFolder(root=f"{args.data_dir}/train", transform=val_transform)
+                val_subset = Subset(val_dataset, val_indices)
         else:
             # Use standard transforms without augmentation
             transform = transforms.Compose([
@@ -79,6 +114,34 @@ def train_model(config=None):
             # Get targets for stratified split
             targets = np.array(train_dataset.targets)
             
+            # Reduce dataset size with stratified sampling
+            subset_fraction = args.subset_fraction
+            if subset_fraction < 1.0:
+                # Get indices for each class
+                class_indices = {}
+                for idx, label in enumerate(targets):
+                    if label not in class_indices:
+                        class_indices[label] = []
+                    class_indices[label].append(idx)
+                
+                # Select a stratified subset of indices
+                subset_indices = []
+                for label, indices in class_indices.items():
+                    # Calculate how many samples to take from this class
+                    n_samples = int(len(indices) * subset_fraction)
+                    # Ensure at least 1 sample per class
+                    n_samples = max(1, n_samples)
+                    # Randomly select indices
+                    selected_indices = np.random.choice(indices, size=n_samples, replace=False)
+                    subset_indices.extend(selected_indices)
+                
+                # Create a subset of the dataset
+                train_dataset_reduced = Subset(train_dataset, subset_indices)
+                # Update targets for the subset
+                targets = np.array([targets[i] for i in subset_indices])
+            else:
+                train_dataset_reduced = train_dataset
+            
             # Perform stratified split
             train_indices, val_indices = train_test_split(
                 np.arange(len(targets)),
@@ -89,16 +152,24 @@ def train_model(config=None):
             )
             
             # Create subset datasets
-            train_subset = Subset(train_dataset, train_indices)
-            val_subset = Subset(train_dataset, val_indices)
+            train_subset = Subset(train_dataset_reduced, train_indices)
+            val_subset = Subset(train_dataset_reduced, val_indices)
         
-        # Create data loaders
+        # Create data loaders with optimized settings
         train_loader = torch.utils.data.DataLoader(
-            train_subset, batch_size=config.batch_size, shuffle=True, num_workers=2
+            train_subset, 
+            batch_size=config.batch_size, 
+            shuffle=True, 
+            num_workers=4,  # Increased from 2
+            pin_memory=True  # Speed up CPU to GPU transfers
         )
         
         val_loader = torch.utils.data.DataLoader(
-            val_subset, batch_size=config.batch_size, shuffle=False, num_workers=2
+            val_subset, 
+            batch_size=config.batch_size, 
+            shuffle=False, 
+            num_workers=4,
+            pin_memory=True
         )
         
         # Get number of classes
@@ -245,40 +316,40 @@ def main():
         },
         'parameters': {
             'num_filters': {
-                'values': [10]
+                'values': [32, 64]  # Reduced options
             },
             'filter_size': {
-                'values': [5]
+                'values': [3]  # Reduced options
             },
             'activation': {
-                'values': ['ReLU'] #, 'GELU', 'SiLU', 'Mish']
+                'values': ['ReLU', 'GELU', 'SiLU', 'Mish']  # Reduced options
             },
             'filter_org': {
-                'values': ['same'] #, 'double', 'half']
+                'values': ['same', 'double', 'half']  # Reduced options
             },
             'batch_norm': {
-                'values': ['Yes'] #, 'No']
+                'values': ['Yes', 'No']
             },
             'dropout': {
-                'values': [0.1] #, 0.0, 0.2]
+                'values': [0.0, 0.1]  # Reduced options
             },
             'data_augmentation': {
-                'values': ['No']
+                'values': ['Yes', 'No']
             },
             'dense_neurons': {
-                'values': [32]
+                'values': [128, 256]  # Reduced options
             },
             'batch_size': {
-                'values': [256]
+                'values': [64, 128]  # Reduced options
             },
             'learning_rate': {
-                'values': [0.001]
+                'values': [0.001, 0.0005]  # Reduced options
             },
             'optimizer': {
-                'values': ['Adam'] #, 'SGD']
+                'values': ['Adam', 'SGD']  # Reduced options
             },
             'epochs': {
-                'value': 10
+                'value': 10  # Reduced from 10
             },
             'img_size': {
                 'value': 224
@@ -337,6 +408,7 @@ if __name__ == "__main__":
     parser.add_argument("--project", type=str, default="da6401-Assignment-2-CE21B097", help="WandB project name")
     parser.add_argument("--entity", type=str, default="ce21b097-indian-institute-of-technology-madras", help="WandB entity name")
     parser.add_argument("--num_runs", type=int, default=30, help="Number of runs to perform in the sweep")
+    parser.add_argument("--subset_fraction", type=float, default=0.25, help="Fraction of dataset to use (0.0-1.0)")
     
     args = parser.parse_args()
     
@@ -347,3 +419,4 @@ if __name__ == "__main__":
     from sklearn.model_selection import train_test_split
     
     main()
+

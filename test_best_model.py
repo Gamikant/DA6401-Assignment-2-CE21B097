@@ -132,11 +132,17 @@ def main():
         print("Loading datasets...")
         test_transform = get_test_transform(img_size=config.img_size)
         
-        # Load datasets
+        # Load datasets - use the full test dataset
         test_dataset = datasets.ImageFolder(root=f"{args.data_dir}/val", transform=test_transform)
         
-        # Create data loader
-        test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False, num_workers=2)
+        # Create data loader with optimized settings
+        test_loader = DataLoader(
+            test_dataset, 
+            batch_size=config.batch_size, 
+            shuffle=False, 
+            num_workers=4,
+            pin_memory=True
+        )
         
         # Get class names
         class_names = test_dataset.classes
