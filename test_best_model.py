@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader
 from model import FlexibleCNN
 from dataset_split import create_stratified_split
 
-# Dictionary to map activation function names to PyTorch classes
 ACTIVATION_FUNCTIONS = {
     'ReLU': nn.ReLU,
     'GELU': nn.GELU,
@@ -46,7 +45,6 @@ def create_prediction_grid(images, labels, predictions, class_names, confidences
     """Create a creative 10x3 grid of images with their true labels and predictions"""
     plt.figure(figsize=(15, 30))
     
-    # Define class icons or emojis for visual enhancement
     class_icons = {
         'Amphibia': '🐸',
         'Animalia': '🦓',
@@ -60,47 +58,43 @@ def create_prediction_grid(images, labels, predictions, class_names, confidences
         'Reptilia': '🦎'
     }
     
-    # Create a 10x3 grid
+    # Creating a 10x3 grid
     for i in range(min(30, len(images))):
-        # Get the image, true label, and prediction
         img = images[i]
         true_label = class_names[labels[i]]
         pred_label = class_names[predictions[i]]
         
-        # Denormalize the image
+        # Denormalizing the image
         img = img * torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1) + torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
         img = torch.clamp(img, 0, 1)
         
-        # Convert to numpy for matplotlib
+        # Converting to numpy for matplotlib
         img = img.permute(1, 2, 0).numpy()
         
-        # Plot the image
+        # Plotting the image
         plt.subplot(10, 3, i + 1)
         plt.imshow(img)
         
-        # Set title color based on prediction correctness
+        # Setting the title color based on prediction correctness
         is_correct = true_label == pred_label
         title_color = 'green' if is_correct else 'red'
         
-        # Get icons for true and predicted classes
         true_icon = class_icons.get(true_label, '')
         pred_icon = class_icons.get(pred_label, '')
         
-        # Create title with icons
         title = f"True: {true_icon} {true_label}\nPred: {pred_icon} {pred_label}"
         
-        # Add confidence score if available
+        # Adding confidence score if available
         if confidences is not None:
             title += f"\nConf: {confidences[i]:.2f}"
         
-        # Add a checkmark or X to indicate correctness
+        # Adding a checkmark or X to indicate correctness
         correctness_symbol = "✓" if is_correct else "✗"
         title += f" {correctness_symbol}"
         
         plt.title(title, color=title_color)
         plt.axis('off')
         
-        # Add a colored border based on correctness
         plt.gca().spines['top'].set_color(title_color)
         plt.gca().spines['bottom'].set_color(title_color)
         plt.gca().spines['left'].set_color(title_color)
@@ -115,27 +109,22 @@ def create_prediction_grid(images, labels, predictions, class_names, confidences
     print("Prediction grid saved as 'prediction_grid.png'")
 
 def main():
-    # Check if best_params.json exists
     if os.path.exists('best_params.json'):
-        # Load the best parameters
+        # Loading the best parameters
         with open('best_params.json', 'r') as f:
             best_config_dict = json.load(f)
         
-        # Convert the dictionary to an argparse.Namespace object
         config = argparse.Namespace(**best_config_dict)
         
         print(f"Loaded best parameters from best_params.json:")
         for key, value in best_config_dict.items():
             print(f"  {key}: {value}")
         
-        # Create data loaders
         print("Loading datasets...")
         test_transform = get_test_transform(img_size=config.img_size)
         
-        # Load datasets - use the full test dataset
         test_dataset = datasets.ImageFolder(root=f"{args.data_dir}/val", transform=test_transform)
         
-        # Create data loader with optimized settings
         test_loader = DataLoader(
             test_dataset, 
             batch_size=config.batch_size, 
@@ -144,11 +133,9 @@ def main():
             pin_memory=True
         )
         
-        # Get class names
         class_names = test_dataset.classes
         print(f"Classes: {class_names}")
         
-        # Create model with the best hyperparameters
         print("Creating model with the best hyperparameters...")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = FlexibleCNN(
@@ -165,7 +152,6 @@ def main():
         )
         model = model.to(device)
         
-        # Load the saved model weights
         if os.path.exists('best_model.pth'):
             print("Loading saved model weights...")
             model.load_state_dict(torch.load('best_model.pth', map_location=device))
@@ -173,7 +159,7 @@ def main():
             print("Error: best_model.pth not found. Cannot load model weights.")
             return
         
-        # Evaluate on test data
+        # Evaluating on test data
         print("Evaluating on test data...")
         model.eval()
         criterion = nn.CrossEntropyLoss()
@@ -181,7 +167,6 @@ def main():
         test_correct = 0
         test_total = 0
         
-        # For visualization
         all_images = []
         all_labels = []
         all_preds = []
@@ -195,15 +180,14 @@ def main():
                 
                 test_loss += loss.item() * inputs.size(0)
                 
-                # Get predictions and confidences
+                # Getting predictions and confidences
                 probabilities = torch.nn.functional.softmax(outputs, dim=1)
                 confidences, predicted = probabilities.max(1)
                 
                 test_total += labels.size(0)
                 test_correct += predicted.eq(labels).sum().item()
                 
-                # Store some images, labels, predictions, and confidences for visualization
-                if len(all_images) < 30:  # Store 30 images for the 10x3 grid
+                if len(all_images) < 30:  # Storing 30 images for the 10x3 grid
                     batch_size = inputs.size(0)
                     num_to_add = min(batch_size, 30 - len(all_images))
                     all_images.extend(inputs[:num_to_add].cpu())
@@ -216,7 +200,7 @@ def main():
         
         print(f'Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}')
         
-        # Create and save the visualization grid
+        # saving the visualization grid
         create_prediction_grid(all_images[:30], all_labels[:30], all_preds[:30], class_names, all_confidences[:30])
     else:
         print("Error: best_params.json not found. Please run sweep.py first to generate best parameters.")

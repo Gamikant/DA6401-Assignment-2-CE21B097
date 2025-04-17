@@ -12,7 +12,7 @@ class FlexibleCNN(nn.Module):
         self.input_size = input_size
         self.filter_org = filter_org
         
-        # Determine filter counts based on organization strategy
+        # filter counts based on organization strategy
         if filter_org == 'same':
             filter_counts = [num_filters] * 5
         elif filter_org == 'double':
@@ -20,13 +20,12 @@ class FlexibleCNN(nn.Module):
         elif filter_org == 'half':
             filter_counts = [num_filters // (2**i) if num_filters // (2**i) >= 8 else 8 for i in range(5)]
         else:
-            # Default to same
             filter_counts = [num_filters] * 5
         
-        # Build convolutional layers
+        # Building convolutional layers
         layers = []
         
-        # First conv block (input channels -> filter_counts[0])
+        # First conv block
         layers.append(nn.Conv2d(input_channels, filter_counts[0], kernel_size=filter_size, padding=filter_size//2))
         if use_batchnorm:
             layers.append(nn.BatchNorm2d(filter_counts[0]))
@@ -45,7 +44,7 @@ class FlexibleCNN(nn.Module):
         
         self.conv_layers = nn.Sequential(*layers)
         
-        # Calculate flattened size after convolutions
+        # Calculating flattened size after convolutions
         self.output_size = input_size // (2**5)
         self.flatten_size = self.output_size * self.output_size * filter_counts[4]
         

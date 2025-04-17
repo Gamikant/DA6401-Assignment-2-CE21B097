@@ -8,7 +8,6 @@ from dataset import get_data_loaders
 from utils import print_model_analysis
 
 def main(args):
-    # Create data loaders
     train_loader, val_loader, class_names = get_data_loaders(
         train_dir=args.train_dir,
         val_dir=args.val_dir,
@@ -18,7 +17,6 @@ def main(args):
     
     print(f"Loaded dataset with {len(class_names)} classes: {class_names}")
     
-    # Create model
     model = FlexibleCNN(
         input_channels=3,
         num_classes=len(class_names),
@@ -29,11 +27,10 @@ def main(args):
         input_size=args.img_size
     )
     
-    # Print model summary
     print(f"\nModel Architecture:")
     print(model)
     
-    # Print model analysis
+    # model analysis
     print_model_analysis(
         model=model,
         m=args.num_filters,
@@ -41,11 +38,11 @@ def main(args):
         n=args.dense_neurons
     )
     
-    # Sample batch to verify model works
+    # to verify model works
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     
-    # Get a sample batch
+    # sample batch
     for images, labels in train_loader:
         images = images.to(device)
         outputs = model(images)

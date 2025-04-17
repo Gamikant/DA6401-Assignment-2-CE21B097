@@ -18,7 +18,6 @@ def print_model_analysis(model, m, k, n):
     print(f"Total computations: {total_computations:,}")
     print(f"Total parameters: {total_parameters:,}")
     
-    # Print the symbolic formula
     print("\nSymbolic formula for computations:")
     print(f"Total computations = 150,528k²m + 16,660k²m² + 49mn + 10n")
     
