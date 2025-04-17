@@ -1,0 +1,5 @@
+[default]
+entity = ce21b097-indian-institute-of-technology-madras
+project = da6401-Assignment-2-CE21B097
+base_url = https://api.wandb.ai
+
