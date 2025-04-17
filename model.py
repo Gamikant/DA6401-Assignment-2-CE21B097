@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class FlexibleCNN(nn.Module):
     def __init__(self, input_channels=3, num_classes=10, num_filters=32, filter_size=3,
-                 activation_fn=nn.ReLU, dense_neurons=128, input_size=224, 
+                 activation_fn=nn.ReLU, dense_neurons=128, input_size=224,
                  filter_org='same', use_batchnorm=False, dropout_rate=0):
         super(FlexibleCNN, self).__init__()
         self.num_filters = num_filters
@@ -62,3 +62,90 @@ class FlexibleCNN(nn.Module):
         x = x.view(-1, self.flatten_size)
         x = self.fc_layers(x)
         return x
+        
+    def calculate_computations(self, m, k, n):
+        """
+        Calculate the total number of computations (multiply-adds) in the network.
+        
+        Args:
+            m: Number of filters in each convolutional layer
+            k: Size of filters (k×k)
+            n: Number of neurons in the dense layer
+            
+        Returns:
+            Total number of computations
+        """
+        input_size = self.input_size
+        
+        # First conv layer (3 input channels)
+        comp_conv1 = input_size * input_size * m * (k * k * 3)
+        
+        # Second conv layer
+        size2 = input_size // 2
+        comp_conv2 = size2 * size2 * m * (k * k * m)
+        
+        # Third conv layer
+        size3 = size2 // 2
+        comp_conv3 = size3 * size3 * m * (k * k * m)
+        
+        # Fourth conv layer
+        size4 = size3 // 2
+        comp_conv4 = size4 * size4 * m * (k * k * m)
+        
+        # Fifth conv layer
+        size5 = size4 // 2
+        comp_conv5 = size5 * size5 * m * (k * k * m)
+        
+        # Final size after 5 max pooling layers
+        final_size = size5 // 2
+        
+        # Dense layer
+        comp_dense = n * (final_size * final_size * m)
+        
+        # Output layer
+        comp_output = 10 * n
+        
+        total_comp = comp_conv1 + comp_conv2 + comp_conv3 + comp_conv4 + comp_conv5 + comp_dense + comp_output
+        
+        return total_comp
+    
+    def calculate_parameters(self, m, k, n):
+        """
+        Calculate the total number of parameters in the network.
+        
+        Args:
+            m: Number of filters in each convolutional layer
+            k: Size of filters (k×k)
+            n: Number of neurons in the dense layer
+            
+        Returns:
+            Total number of parameters
+        """
+        # First conv layer (3 input channels)
+        params_conv1 = m * (k * k * 3 + 1)  # +1 for bias
+        
+        # Second conv layer
+        params_conv2 = m * (k * k * m + 1)
+        
+        # Third conv layer
+        params_conv3 = m * (k * k * m + 1)
+        
+        # Fourth conv layer
+        params_conv4 = m * (k * k * m + 1)
+        
+        # Fifth conv layer
+        params_conv5 = m * (k * k * m + 1)
+        
+        # Final size after 5 max pooling layers
+        final_size = self.input_size // (2**5)
+        
+        # Dense layer
+        params_dense = (final_size * final_size * m) * n + n
+        
+        # Output layer
+        params_output = n * 10 + 10
+        
+        total_params = params_conv1 + params_conv2 + params_conv3 + params_conv4 + params_conv5 + params_dense + params_output
+        
+        return total_params
+
