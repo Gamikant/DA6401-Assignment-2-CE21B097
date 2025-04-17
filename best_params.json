@@ -1,0 +1,17 @@
+{
+    "activation": "ReLU",
+    "batch_norm": "Yes",
+    "batch_size": 256,
+    "data_augmentation": "No",
+    "dense_neurons": 32,
+    "dropout": 0.1,
+    "epochs": 10,
+    "filter_org": "same",
+    "filter_size": 5,
+    "img_size": 224,
+    "learning_rate": 0.001,
+    "num_filters": 10,
+    "optimizer": "Adam",
+    "best_val_acc": 0.1765,
+    "run_id": "9nwwtppr"
+}

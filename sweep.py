@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import wandb
+import json
 import argparse
 import os
 from torchvision import transforms
@@ -31,7 +32,7 @@ def get_data_augmentation_transform(img_size=224):
 
 def train_model(config=None):
     # Initialize wandb run
-    with wandb.init(config=config, project=args.project, entity=args.entity):
+    with wandb.init(config=config, project=args.project, entity=args.entity) as run:
         # Access all hyperparameter values from wandb.config
         config = wandb.config
         
@@ -104,6 +105,7 @@ def train_model(config=None):
         num_classes = len(train_dataset.classes)
         
         # Create model with the specified hyperparameters
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = FlexibleCNN(
             input_channels=3,
             num_classes=num_classes,
@@ -116,7 +118,8 @@ def train_model(config=None):
             use_batchnorm=(config.batch_norm == 'Yes'),
             dropout_rate=config.dropout
         )
-                
+        model = model.to(device)
+        
         # Define loss function and optimizer
         criterion = nn.CrossEntropyLoss()
         
@@ -124,6 +127,10 @@ def train_model(config=None):
             optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
         else:  # SGD
             optimizer = optim.SGD(model.parameters(), lr=config.learning_rate, momentum=0.9)
+        
+        # Variables to track best model
+        best_val_acc = 0.0
+        best_model_path = os.path.join(wandb.run.dir, "best_model.pth")
         
         # Train the model
         for epoch in range(config.epochs):
@@ -134,6 +141,7 @@ def train_model(config=None):
             total = 0
             
             for inputs, labels in train_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
                 
                 # Zero the parameter gradients
                 optimizer.zero_grad()
@@ -163,6 +171,7 @@ def train_model(config=None):
             
             with torch.no_grad():
                 for inputs, labels in val_loader:
+                    inputs, labels = inputs.to(device), labels.to(device)
                     outputs = model(inputs)
                     loss = criterion(outputs, labels)
                     
@@ -186,8 +195,47 @@ def train_model(config=None):
             print(f'Epoch {epoch+1}/{config.epochs} - '
                   f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, '
                   f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
+            
+            # Save the best model
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                torch.save(model.state_dict(), best_model_path)
+                
+                # Save the hyperparameters as a JSON file
+                config_dict = {k: v for k, v in config.items()}
+                config_dict['best_val_acc'] = best_val_acc
+                config_dict['run_id'] = run.id
+                
+                with open('best_params.json', 'w') as f:
+                    json.dump(config_dict, f, indent=4)
+                
+                # Also save as an artifact
+                artifact = wandb.Artifact(
+                    name=f"best-model-{run.id}", 
+                    type="model",
+                    description=f"Best model with val_acc: {best_val_acc:.4f}"
+                )
+                artifact.add_file(best_model_path)
+                artifact.add_file('best_params.json')
+                run.log_artifact(artifact)
+        
+        # At the end of training, also save the final model
+        final_model_path = os.path.join(wandb.run.dir, "final_model.pth")
+        torch.save(model.state_dict(), final_model_path)
+        
+        # Log the final model as an artifact
+        artifact = wandb.Artifact(
+            name=f"final-model-{run.id}", 
+            type="model",
+            description=f"Final model with val_acc: {val_acc:.4f}"
+        )
+        artifact.add_file(final_model_path)
+        run.log_artifact(artifact)
 
 def main():
+    # Import needed modules
+    import json
+    
     # Define sweep configuration
     sweep_config = {
         'method': 'bayes',  # Use Bayesian optimization
@@ -197,37 +245,37 @@ def main():
         },
         'parameters': {
             'num_filters': {
-                'values': [32, 64]
+                'values': [10]
             },
             'filter_size': {
-                'values': [3, 5]
+                'values': [5]
             },
             'activation': {
-                'values': ['ReLU', 'GELU', 'SiLU', 'Mish']
+                'values': ['ReLU'] #, 'GELU', 'SiLU', 'Mish']
             },
             'filter_org': {
-                'values': ['same', 'double', 'half']
+                'values': ['same'] #, 'double', 'half']
             },
             'batch_norm': {
-                'values': ['Yes', 'No']
+                'values': ['Yes'] #, 'No']
             },
             'dropout': {
-                'values': [0.0, 0.2, 0.3]
+                'values': [0.1] #, 0.0, 0.2]
             },
             'data_augmentation': {
-                'values': ['Yes', 'No']
+                'values': ['No']
             },
             'dense_neurons': {
-                'values': [128, 256, 512]
+                'values': [32]
             },
             'batch_size': {
-                'values': [32, 64, 128]
+                'values': [256]
             },
             'learning_rate': {
-                'values': [0.001, 0.0005, 0.0001]
+                'values': [0.001]
             },
             'optimizer': {
-                'values': ['Adam', 'SGD']
+                'values': ['Adam'] #, 'SGD']
             },
             'epochs': {
                 'value': 10
@@ -243,6 +291,45 @@ def main():
     
     # Run the sweep
     wandb.agent(sweep_id, train_model, count=args.num_runs)
+    
+    # After all runs are complete, find the best run
+    api = wandb.Api()
+    runs = api.runs(f"{args.entity}/{args.project}", {"sweep": sweep_id})
+    
+    best_run = None
+    best_val_acc = 0.0
+    
+    for run in runs:
+        if run.summary.get('val_acc', 0) > best_val_acc:
+            best_val_acc = run.summary.get('val_acc', 0)
+            best_run = run
+    
+    if best_run:
+        print(f"Best run: {best_run.name} with val_acc: {best_val_acc:.4f}")
+        
+        # Get the best model artifact
+        artifacts = best_run.logged_artifacts()
+        best_model_artifact = None
+        
+        for artifact in artifacts:
+            if artifact.type == "model" and "best-model" in artifact.name:
+                best_model_artifact = artifact
+                break
+        
+        if best_model_artifact:
+            # Download the artifact
+            artifact_dir = best_model_artifact.download()
+            
+            # Copy the model and parameters to a standard location
+            import shutil
+            shutil.copy(os.path.join(artifact_dir, "best_model.pth"), "best_model.pth")
+            shutil.copy(os.path.join(artifact_dir, "best_params.json"), "best_params.json")
+            
+            print(f"Best model and parameters saved to current directory")
+        else:
+            print("Could not find best model artifact")
+    else:
+        print("Could not find best run")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run hyperparameter sweep for CNN model")
