@@ -13,6 +13,7 @@ This repository contains the implementation of a custom Convolutional Neural Net
 ├── utils.py               # Utility functions for model analysis
 ├── sweep.py               # Hyperparameter tuning with Weights &amp; Biases
 ├── test_best_model.py     # Evaluation of the best model on test data
+├── best_model.pth         # Best model on val data
 ├── best_params.json       # Best hyperparameters from the sweep
 ├── prediction_grid.png    # Visualization of model predictions
 ├── artifacts/             # Best parameters and model of all sweeps saved is separate folders inside artifacts
